@@ -6,15 +6,21 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	`strings`
 	"time"
 )
 
 var (
+	errInvalidTag  = errors.New("invalid tag name")
 	errInvalidType = errors.New("not a struct pointer")
 )
 
 const (
 	fieldName = "default"
+)
+
+var (
+	TagName string = fieldName
 )
 
 // Set initializes members in a struct referenced by a pointer.
@@ -25,6 +31,10 @@ func Set(ptr interface{}) error {
 		return errInvalidType
 	}
 
+	if strings.TrimSpace(TagName) == "" {
+		return errInvalidTag
+	}
+
 	v := reflect.ValueOf(ptr).Elem()
 	t := v.Type()
 
@@ -33,7 +43,37 @@ func Set(ptr interface{}) error {
 	}
 
 	for i := 0; i < t.NumField(); i++ {
-		if defaultVal := t.Field(i).Tag.Get(fieldName); defaultVal != "-" {
+		if defaultVal := t.Field(i).Tag.Get(TagName); defaultVal != "-" {
+			if err := setField(v.Field(i), defaultVal); err != nil {
+				return err
+			}
+		}
+	}
+	callSetter(ptr)
+	return nil
+}
+
+// SetWithTag initializes members in a struct referenced by a pointer using an explicit tag name.
+// Maps and slices are initialized by `make` and other primitive types are set with default values.
+// `ptr` should be a struct pointer
+func SetWithTag(ptr interface{}, runtimeTag string) error {
+	if reflect.TypeOf(ptr).Kind() != reflect.Ptr {
+		return errInvalidType
+	}
+
+	if strings.TrimSpace(runtimeTag) == "" {
+		return errInvalidTag
+	}
+
+	v := reflect.ValueOf(ptr).Elem()
+	t := v.Type()
+
+	if t.Kind() != reflect.Struct {
+		return errInvalidType
+	}
+
+	for i := 0; i < t.NumField(); i++ {
+		if defaultVal := t.Field(i).Tag.Get(runtimeTag); defaultVal != "-" {
 			if err := setField(v.Field(i), defaultVal); err != nil {
 				return err
 			}

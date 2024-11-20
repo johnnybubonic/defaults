@@ -24,6 +24,7 @@ Initialize structs with default values
 - Recursively initializes fields in a struct
 - Dynamically sets default values by [`defaults.Setter`](./setter.go) interface
 - Preserves non-initial values from being reset with a default value
+- User-Definable tag name
 
 
 Usage
@@ -41,6 +42,9 @@ import (
 )
 
 type Gender string
+
+// Optionally use a different tag name globally.
+//defaults.TagName = "my_custom_tag"
 
 type Sample struct {
 	Name    string `default:"John Smith"`
@@ -83,6 +87,12 @@ func main() {
 	if err := defaults.Set(obj); err != nil {
 		panic(err)
 	}
+	// Or with a specific tag name (without setting defaults.TagName globally):
+	/*
+	if err := defaults.SetWithTag(obj, "some_tag_name"); err != nil {
+	    panic(err)
+	}
+	*/
 
 	out, err := json.MarshalIndent(obj, "", "	")
 	if err != nil {
