@@ -15,48 +15,21 @@ var (
 	errInvalidType = errors.New("not a struct pointer")
 )
 
-const (
-	fieldName = "default"
-)
-
-var (
-	TagName string = fieldName
-)
-
 // Set initializes members in a struct referenced by a pointer.
 // Maps and slices are initialized by `make` and other primitive types are set with default values.
 // `ptr` should be a struct pointer
-func Set(ptr interface{}) error {
-	if reflect.TypeOf(ptr).Kind() != reflect.Ptr {
-		return errInvalidType
-	}
+func Set(ptr interface{}) (err error) {
 
-	if strings.TrimSpace(TagName) == "" {
-		return errInvalidTag
-	}
+	err = SetWithTag(ptr, "default")
 
-	v := reflect.ValueOf(ptr).Elem()
-	t := v.Type()
-
-	if t.Kind() != reflect.Struct {
-		return errInvalidType
-	}
-
-	for i := 0; i < t.NumField(); i++ {
-		if defaultVal := t.Field(i).Tag.Get(TagName); defaultVal != "-" {
-			if err := setField(v.Field(i), defaultVal); err != nil {
-				return err
-			}
-		}
-	}
-	callSetter(ptr)
-	return nil
+	return
 }
 
 // SetWithTag initializes members in a struct referenced by a pointer using an explicit tag name.
 // Maps and slices are initialized by `make` and other primitive types are set with default values.
 // `ptr` should be a struct pointer
 func SetWithTag(ptr interface{}, runtimeTag string) error {
+
 	if reflect.TypeOf(ptr).Kind() != reflect.Ptr {
 		return errInvalidType
 	}
@@ -74,7 +47,7 @@ func SetWithTag(ptr interface{}, runtimeTag string) error {
 
 	for i := 0; i < t.NumField(); i++ {
 		if defaultVal := t.Field(i).Tag.Get(runtimeTag); defaultVal != "-" {
-			if err := setField(v.Field(i), defaultVal); err != nil {
+			if err := setField(v.Field(i), defaultVal, runtimeTag); err != nil {
 				return err
 			}
 		}
@@ -91,7 +64,15 @@ func MustSet(ptr interface{}) {
 	}
 }
 
-func setField(field reflect.Value, defaultVal string) error {
+// MustSetWithTag function is a wrapper of SetWithTag function
+// It will call Set and panic if err not equals nil.
+func MustSetWithTag(ptr interface{}, runtimeTag string) {
+	if err := SetWithTag(ptr, runtimeTag); err != nil {
+		panic(err)
+	}
+}
+
+func setField(field reflect.Value, defaultVal string, tagName string) error {
 	if !field.CanSet() {
 		return nil
 	}
@@ -200,16 +181,16 @@ func setField(field reflect.Value, defaultVal string) error {
 	switch field.Kind() {
 	case reflect.Ptr:
 		if isInitial || field.Elem().Kind() == reflect.Struct {
-			setField(field.Elem(), defaultVal)
+			setField(field.Elem(), defaultVal, tagName)
 			callSetter(field.Interface())
 		}
 	case reflect.Struct:
-		if err := Set(field.Addr().Interface()); err != nil {
+		if err := SetWithTag(field.Addr().Interface(), tagName); err != nil {
 			return err
 		}
 	case reflect.Slice:
 		for j := 0; j < field.Len(); j++ {
-			if err := setField(field.Index(j), ""); err != nil {
+			if err := setField(field.Index(j), "", tagName); err != nil {
 				return err
 			}
 		}
@@ -221,14 +202,14 @@ func setField(field reflect.Value, defaultVal string) error {
 			case reflect.Ptr:
 				switch v.Elem().Kind() {
 				case reflect.Struct, reflect.Slice, reflect.Map:
-					if err := setField(v.Elem(), ""); err != nil {
+					if err := setField(v.Elem(), "", tagName); err != nil {
 						return err
 					}
 				}
 			case reflect.Struct, reflect.Slice, reflect.Map:
 				ref := reflect.New(v.Type())
 				ref.Elem().Set(v)
-				if err := setField(ref.Elem(), ""); err != nil {
+				if err := setField(ref.Elem(), "", tagName); err != nil {
 					return err
 				}
 				field.SetMapIndex(e, ref.Elem().Convert(v.Type()))
